@@ -47,6 +47,9 @@
                     colReorder: true,
                     responsive: false,
                     bFilter: false,
+                    initComplete: function(settings, json) {
+                        test(settings, json);
+                    },
 
                     // Scroller:
                     scrollY: window.innerHeight / 1.4,
@@ -61,12 +64,37 @@
                             "data": null,
                             "defaultContent": ''
                         },
+                        {"data": "id",
+                         "name": "id",
+                         "orderable": true},
                         {
-                            "data": "experiment_name", "name": "experiment.name",
+                            "data": "experiment_name",
+                            "name": "experiment.name",
                             "render": function (data, type, row) {
-                                return '<span sacred-content="status-icon" sacred-status="' + row.status +
-                                    '" sacred-is-alive="' + row.is_alive + '">&block;</span>  ' + data;
-                            }
+                                // The block is a small color indicator giving
+                                // the state of the experiment.
+                                var block = '<span ' +
+                                            'sacred-content="status-icon"  ' +
+                                            'sacred-status="' + row.status +
+                                            '" sacred-is-alive="' + row.is_alive +
+                                            '">&block;</span>';
+                                var input_data = '<input' +
+                                                 ' type="text"' +
+                                                 ' class="editable"' +
+                                                 ' show=false' +
+                                                 ' id=experiment_name_' + row.id +
+                                                 ' value="' + data + '"' +
+                                                 ' />';
+                                var data = '<span' +
+                                           ' class="editable"' +
+                                           ' show=true' +
+                                           ' id=experiment_name_' + row.id +
+                                           ' >' +
+                                           data  +
+                                           '</span>';
+                                return block + '  ' + data + ' ' + input_data;
+                            },
+                            "class": 'experiment-name'
                         },
                         /*{
                          "data": "status", "name": "status", "render": function (data, row) {
@@ -81,7 +109,7 @@
                         {"data": "result", "name": "result"},
                         {"data": "id", "visible": false}
                     ],
-                    order: [["5", "desc"]]
+                    order: [["6", "desc"]]
                 }
             );
             // Add event listener for opening and closing details
@@ -139,6 +167,58 @@
                     f();
                 }
             });
+            // Transforms an experiment name text to a textbox.
+            jqRuns.find('tbody').on('dblclick',
+                                    'span[id^=experiment_name]',
+                                    function () {
+                var text = $('span[id=' + this.id + ']');
+                var text_box = $('input[id=' + this.id + ']');
+
+                // Checking that we are in 'read mode' - not useful per se, but
+                // for rigour purposes.
+                if(text_box.attr('show') == 'false' && text.attr('show') == 'true') {
+                    text.attr('show', false);
+                    text_box.attr('show', true);
+                    text_box.focus();
+                }
+
+            });
+            // Validate the entry of a textbox once out of focus.
+            jqRuns.find('tbody').on('focusout keypress',
+                                    'input[id^=experiment_name]',
+                                     function (e) {
+                var text = $('span[id=' + this.id + ']');
+                var text_box = $('input[id=' + this.id + ']');
+
+                // Checking that we are in 'edit mode' - not useful per se, but
+                // for rigour purposes.
+                var is_edit_mode = text_box.attr('show') == 'true' &&
+                                   text.attr('show') == 'false';
+                var is_correct_exit = e.which == 13 ||
+                                      e.type == 'focusout';
+                if(is_edit_mode && is_correct_exit) {
+                    // Updating the text on the page.
+                    text.attr('show', true);
+                    text.html(text_box.val());
+                    text_box.attr('show', false);
+
+                    // Calling the back-end. Retrieving the experiment ID.
+                    var row = text_box.closest("tr[role='row']");
+                    var table = $('#runs').DataTable();
+                    var id = table.row(row).data()['id'];
+                    var url = "{{url_for('routes.update_experiment_name')}}";
+                    $.ajax({
+                        url: url,
+                        data: {'new_name': text.text(),
+                               'id': id}
+                    });
+                }
+
+            });
+
+            function test(settings, json) {
+                //debugger;
+             }
         });
     </script>
 </head>
@@ -157,6 +237,7 @@
         <thead>
         <tr>
             <th><!-- expand / hide button --></th>
+            <th>ID</th>
             <th>Experiment name</th>
             <th>Start time</th>
             <th>Last activity</th>

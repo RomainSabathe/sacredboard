@@ -56,4 +56,12 @@ tr.shown td.details-control:before {
     content: "-";
 }
 
+.editable[show="false"] {
+    display: none;
+}
+
+.editable[show="true"] {
+    display: inline;
+}
+
 /* End-master-detail-view*/

@@ -95,6 +95,17 @@ def close_tensorboards():
     return "Stopping tensorboard"
 
 
+@routes.route('/_update_experiment_name')
+def update_experiment_name():
+    new_name = request.args.get('new_name')
+    run_id = request.args.get('id')  # That's a string.
+    run_id = int(run_id)  # But IDs are ints in MongoDB.
+
+    database_handler = current_app.config["data"]
+    database_handler.rename_experiment(run_id, new_name)
+    return Response()
+
+
 @routes.errorhandler(process.TensorboardNotFoundError)
 def handle_tensorboard_not_found(e):
     return "Tensorboard not found in your system." \
