@@ -56,6 +56,18 @@
                     ajax: '{{url_for("routes.api_runs")}}',
                     "columns": [
                         {
+                            "orderable": false,
+                            "data": null,
+                            "render": function (data, type, row) {
+                                var input =
+                                 '<input ' +
+                                 ' type="checkbox" ' +
+                                 ' id="experiment_selection_' + row.id + '"' +
+                                 ' />'
+                                 return input
+                            }
+                        },
+                        {
                             "className": 'details-control',
                             "orderable": false,
                             "data": null,
@@ -86,6 +98,7 @@
             );
             // Add event listener for opening and closing details
             jqRuns.find('tbody').on('click', 'tr', function () {
+                return;
                 var tr = $(this);
                 var row = table.row(tr);
                 if (row.child.isShown()) {
@@ -139,12 +152,67 @@
                     f();
                 }
             });
+
+            // Toggling 'checked' status for checkboxes
+            jqRuns.find('tbody').on('click', 'input[type="checkbox"]', function () {
+                if(this.checked){
+                    this.setAttribute('checked', '');
+                } else {
+                    this.removeAttribute('checked');
+                }
+            });
+
+            // Making the 'plot' button clickable when experiments are ticked.
+            jqRuns.find('tbody').on('click', 'input[type="checkbox"]', function () {
+                // Counting the number of ticked experiments.
+                var n = $('input[type="checkbox"][checked]').length
+                var button = $('#btn_plot')
+
+                // If greater than 0, we make the button clickable.
+                if(n > 0) {
+                    button.attr('class', 'btn btn-default');
+                } else {
+                    button.attr('class', 'btn disabled');
+                }
+            });
+
+            // Start the plotting process when we hit the 'plot' button.
+            $('#btn_plot').on('click', function () {
+                // Making sure the button is clickable.
+                if($(this).attr('class').includes('disabled')){
+                    return;
+                }
+
+                var ticked_tickboxes = $("input[type='checkbox'][checked]");
+                var ticked_rows = [];
+                ticked_tickboxes.each(function () {
+                    var row = $(this).closest("tr[role='row']")[0];
+                    ticked_rows.push(row);
+                });
+                var ticked_ids = [];
+                var table = $('#runs').DataTable();
+                for(var i = 0; i < ticked_rows.length; i++) {
+                    var ticked_row = ticked_rows[i];
+                    var id = table.row(ticked_row).data()['id'];
+                    ticked_ids.push(id);
+                };
+
+                var url = "{{url_for('routes.plot_experiments')}}";
+                $.ajax({
+                    url: url,
+                    dataType: 'json',
+                    data: {ids: JSON.stringify(ticked_ids)}
+                });
+            });
         });
     </script>
 </head>
 <body>
 <div class="container-fluid">
     <h1>Sacredboard: Run Viewer</h1>
+    <button type="button" class="btn disabled"
+            id="btn_plot">Plot the experiments</button>
+    <p></p>  <!-- TODO: Ugly. -->
     <table id="runs" class="table table-striped table-hover">
         <caption>Experiments Run Overview<br>
             Legend: <span class="run-alive">&block;</span> Running,
@@ -157,6 +225,7 @@
         <thead>
         <tr>
             <th><!-- expand / hide button --></th>
+            <th><!-- checkbox for experiment selection --></th>
             <th>Experiment name</th>
             <th>Start time</th>
             <th>Last activity</th>

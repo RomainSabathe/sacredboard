@@ -2,6 +2,7 @@
 import re
 from pathlib import Path
 
+import json
 from flask import Blueprint
 from flask import current_app
 from flask import render_template
@@ -9,6 +10,7 @@ from flask import request, Response, redirect, url_for
 
 import sacredboard.app.process.process as proc
 from ..process import process
+from ..process import plot
 
 routes = Blueprint("routes", __name__)
 
@@ -93,6 +95,21 @@ def run_tensorboard(run_id, tflog_id):
 def close_tensorboards():
     proc.stop_all_tensorboards()
     return "Stopping tensorboard"
+
+
+@routes.route("/_plot_experiments")
+def plot_experiments():
+    run_ids = json.loads(request.args.get('ids'))
+    run_ids = [int(run_id) for run_id in run_ids]
+
+    database_handler = current_app.config["data"]
+    records = []
+    for _id in run_ids:
+        next_record = database_handler.get_run(_id)
+        records.append(next_record)
+
+    plot.plot_records(records)
+    return Response()
 
 
 @routes.errorhandler(process.TensorboardNotFoundError)
