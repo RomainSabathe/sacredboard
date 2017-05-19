@@ -1,5 +1,7 @@
 import plotly
 import numpy as np
+import plotly.plotly as py
+import plotly.graph_objs as go
 import plotly.tools as tls
 import matplotlib.pyplot as plt
 
@@ -15,68 +17,76 @@ def get_idx_last_minibatch(record):
 def get_X_Y_from_record(record, stage):
     """stage is 'train' or 'val'."""
     if stage == 'train':
-        X = np.arange(0, get_idx_last_minibatch(record), 1) * 1e-3
-        Y = record['info']['train_minibatch_losses']
-    elif stage == 'val':
-        validate_every = record['config']['validate_every']
-        X = np.arange(validate_every, get_idx_last_minibatch(record),
-                      validate_every) * 1e-3
-        Y = record['info']['val_epoch_scores']
+        X = [idx_and_loss[0] for idx_and_loss in record['info']['train_losses']]
+        Y = [idx_and_loss[1] for idx_and_loss in record['info']['train_losses']]
+    else:  # For now, it's only stage == 'val'
+        X = [idx_and_score[0] for idx_and_score in record['info']['val_scores']]
+        Y = [idx_and_score[1] for idx_and_score in record['info']['val_scores']]
 
     return X, Y
 
 
 def plot_records(records):
-    fig, ax = plt.subplots()
-    #fig.subplots_adjust(left=0.2, bottom=0.2, right=0.8, top=0.9)
-    #ax.set_xlabel(r'Minibatch ($\times 10^3$)')
+    data = []
+    records = sorted(records, key=lambda record: int(record['_id']))
+    try:
+        for i, record in enumerate(records):
+            X, Y = get_X_Y_from_record(record, 'train')
+            trace_train = go.Scatter(
+                x=X,
+                y=Y,
+                mode='lines',
+                name=format(record['experiment']['name']),
+                yaxis='yaxis data',
+                line=dict(
+                    color=colors[i],
+                ),
+                opacity=1./len(records) * 0.5
+            )
+            data.append(trace_train)
 
-    all_lines = []
-    for ii, record in enumerate(records):
-        experiment_name = record['experiment']['name']
-        if ii >= len(colors):
-            continue
-        color = colors[ii]
+            X, Y = get_X_Y_from_record(record, 'val')
+            y = []
+            smoothing = 10
+            for j in range(len(Y[:(-smoothing)])):
+                val = np.mean(Y[j:j+smoothing])
+                y.append(val)
+            X = np.linspace(0, X[-1], len(y))
+            Y = np.array(y)
+            trace_val = go.Scatter(
+                x=X,
+                y=Y,
+                mode='lines+markers',
+                name=format(record['experiment']['name']),
+                yaxis='y2',
+                line=dict(
+                    color=colors[i],
+                ),
+                opacity=0.7
+            )
+            data.append(trace_val)
 
-        # Training loss.
-        X, Y = get_X_Y_from_record(record, 'train')
-        all_lines.extend(ax.plot(
-            X, Y,
-            label='{}'.format(experiment_name),
-            c=color,
-            linewidth=0.7,
-            alpha=0.5))
-        ax.set_ylabel('CTC loss')
-        #ax.tick_params('y', colors='#3498db')
-        ax.set_yscale('log')
+        layout = go.Layout(
+            title='Loss over minibatches',
+            xaxis=dict(
+                title='Minibatches'
+            ),
+            yaxis=dict(
+                title='CTC loss',
+                type='log'
+            ),
+            yaxis2=dict(
+                title='Normalized Levenshtein distance',
+                overlaying='y',
+                side='right',
+                type='log'
+            )
+        )
 
-    # Validation score
-    ax_right = ax.twinx()
-    for ii, record in enumerate(records):
-        experiment_name = record['experiment']['name']
-        if ii >= len(colors):
-            continue
-        color = colors[ii]
-        X, Y = get_X_Y_from_record(record, 'val')
-        ax_right.plot(
-            X, Y,
-            #label='Val score - {}'.format(experiment_name),
-            c=color,
-            marker='D',
-            linewidth=0.7,
-            markersize=2.)
-        ax_right.set_ylabel('Levenshtein score')
-        #ax_right.tick_params('y', colors='#e74c3c')
-        ax_right.set_yscale('log')
-        #ax_right.set_ylim([0.04, 0.055])
+        fig = go.Figure(data=data, layout=layout)
+        plotly.offline.plot(fig)
+    except Exception as e:
+        print(e)
+        import pdb; pdb.set_trace()
+        pass
 
-    # Legend
-    #all_lines = line_train + line_test
-    #all_lines = line_test
-    #labels = [l.get_label() for l in all_lines]
-    #legend = ax.legend(all_lines, labels, frameon=True)
-    #legend.get_frame().set_facecolor('#FFFFFF')
-
-    ax.grid(True)
-    plotly_fig = tls.mpl_to_plotly(fig)
-    plotly.offline.plot(plotly_fig)
